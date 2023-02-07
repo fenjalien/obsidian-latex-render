@@ -5,38 +5,29 @@ import * as temp from 'temp';
 import * as path from 'path';
 import { exec } from 'child_process';
 
-// Remember to rename these classes and interfaces!
-
 interface MyPluginSettings {
-	pdflatexCommand: fs.PathLike,
-	pdf2svgCommand: fs.PathLike,
+	command: string
 	timeout: number,
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
-	pdflatexCommand: "pdflatex",
-	pdf2svgCommand: "pdf2svg2",
+	// `"${this.settings.pdflatexCommand}" -interaction=nonstopmode -halt-on-error -shell-escape "${texFile}" && "${this.settings.pdf2svgCommand}" "${path.join(cwd, pdfFile)}" "${cwd}"`
+	// 
+	command: `pdflatex -interaction=nonstopmode -halt-on-error -shell-escape "{tex-file}" && pdf2svg "{pdf-file}" "{output-dir}"`,
 	timeout: 10000,
 
 }
 
 export default class MyPlugin extends Plugin {
 	settings: MyPluginSettings;
-	svgFolder = this.app.vault.configDir + "\\latex-svg-renders";
 
 	async onload() {
 		await this.loadSettings();
-		if (!(await this.app.vault.adapter.exists(this.svgFolder)).valueOf()) {
-			this.app.vault.createFolder(this.svgFolder);
-		}
 		this.addSettingTab(new SampleSettingTab(this.app, this));
 		this.registerMarkdownCodeBlockProcessor("latex", (s, c) => this.renderLatexToContainer(s, c));
 	}
 
 	onunload() {
-		if (this.app.vault.adapter.exists(this.svgFolder).valueOf()) {
-			this.app.vault.adapter.rmdir(this.svgFolder, true);
-		}
 	}
 
 	async loadSettings() {
@@ -62,33 +53,26 @@ export default class MyPlugin extends Plugin {
 		return new Promise(async (resolve, reject) => {
 			source = "\\documentclass{standalone}\n" + source;
 			let md5Hash = Md5.hashStr(source);
-			let basePath = (this.app.vault.adapter as FileSystemAdapter).getBasePath();
-			let localCwd = path.join(this.svgFolder, md5Hash);
-			let cwd = path.join(basePath, localCwd);
 			let svgFile = md5Hash + ".svg";
-			let svgPath = path.join(this.svgFolder, svgFile);
 			let texFile = md5Hash + ".tex";
 			let pdfFile = md5Hash + ".pdf";
 
-			if (await this.app.vault.adapter.exists(svgPath)) {
-				resolve(svgPath)
-			} else {
-				await this.app.vault.adapter.mkdir(localCwd);
-				await this.app.vault.create(path.join(localCwd, texFile), source);
+			temp.mkdir("obsidian-latex-renderer", (err, dirPath) => {
+				if (err) reject(err);
+				fs.writeFileSync(path.join(dirPath, texFile), source);
 				exec(
-					`"${this.settings.pdflatexCommand}" -interaction=nonstopmode -halt-on-error -shell-escape "${texFile}" && "${this.settings.pdf2svgCommand}" "${path.join(cwd, pdfFile)}" "${cwd}"`,
-					{ timeout: this.settings.timeout, cwd: cwd },
+					this.settings.command.replace("{tex-file}", texFile).replace("{pdf-file}", path.join(dirPath, pdfFile)).replace("{output-dir}", dirPath)
+					,
+					{ timeout: this.settings.timeout, cwd: dirPath },
 					async (err, stdout, stderr) => {
 						if (err) reject([err, stdout, stderr]);
 						else {
-							// await this.app.vault.adapter.rename(path.join(localCwd, "content1.svg"), svgPath);
-							let svgData = await this.app.vault.adapter.read(path.join(localCwd, "content1.svg"));
-							await this.app.vault.adapter.rmdir(localCwd, true);
+							let svgData = fs.readFileSync(path.join(dirPath, "content1.svg"));
 							resolve(svgData);
 						};
 					},
 				);
-			}
+			})
 		});
 	}
 }
@@ -109,20 +93,13 @@ class SampleSettingTab extends PluginSettingTab {
 		containerEl.createEl('h2', { text: 'Settings for my awesome plugin.' });
 
 		new Setting(containerEl)
-			.setName('pdflatex Command')
+			.setName('Command to generate SVG')
 			.addText(text => text
-				.setValue(this.plugin.settings.pdflatexCommand.toString())
+				.setValue(this.plugin.settings.command.toString())
 				.onChange(async (value) => {
-					this.plugin.settings.pdflatexCommand = value;
-					await this.plugin.saveSettings();
-				}));
-		new Setting(containerEl)
-			.setName('pdf2svg Command')
-			.addText(text => text
-				.setValue(this.plugin.settings.pdf2svgCommand.toString())
-				.onChange(async (value) => {
-					this.plugin.settings.pdf2svgCommand = value;
+					this.plugin.settings.command = value;
 					await this.plugin.saveSettings();
 				}));
 	}
 }
+
