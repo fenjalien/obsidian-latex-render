@@ -46,6 +46,11 @@ The content inside of `latex` code blocks will be rendered using the given comma
 
 The generated svg's `<div>` parent has the class `block-language-latex`, so it can be styled using CSS snippets. For example, if you are using dark mode you can set `filter: invert(100%)` to invert the colours for a quick hack for dark themed diagrams. You could also set `background-color: white`.
 
+## Caching
+By default the plugin will keep generated `.svg` files in `.obsidian/obsidian-latex-render-svg-cache/` so it won't have to re-render if nothing in the code block has changed, or you copy the code block to a different file, the plugin will simply reuse the `.svg` file. It'll keep track of which files use each `.svg` and when no files use a `.svg` the plugin removes it from the cache.
+
+This should allow (hasn't been tested) `latex` code blocks to appear as `.svg` in notes when the vault is synced across different devices that may not have `latex` installed. Just don't edit the code block otherwise it won't be happy.
+
 ## Examples
 The svgs shown below have been generated in Obsidian with the setup in [`tectonic` and `pdf2svg2`](###-`tectonic`-and-`pdf2svg2`-(recommended))
 
@@ -174,8 +179,8 @@ C' \arrow[rr,"k'" near end] \arrow[dr,swap,"c"] && D' \arrow[dr,swap,"d"] \\
 ````
 
 # TODO
-- Cache rendered svgs. At the moment they just get left in the temp folder. The only thing I'm stuck on for this is how can you tell when an svg isn't being used anymore?
 - Use `tectonic`'s html experimental output, removing the need for `pdf2svg`
 - Find a better name (it feels generic, i don't like it)
 - Add preamable's
 - Github actions release
+- Use https://quicklatex.com/ as a renderer
