@@ -9,16 +9,14 @@ interface MyPluginSettings {
 	command: string,
 	timeout: number,
 	enableCache: boolean,
-	cache: Map<string, Set<string>>; // Key: md5 hash of latex source. Value: Set of file path names.
+	cache: Array<[string, Set<string>]>;
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
-	// `"${this.settings.pdflatexCommand}" -interaction=nonstopmode -halt-on-error -shell-escape "${texFile}" && "${this.settings.pdf2svgCommand}" "${path.join(cwd, pdfFile)}" "${cwd}"`
-	// 
-	command: `pdflatex -interaction=nonstopmode -halt-on-error -shell-escape "{tex-file}" && pdf2svg "{pdf-file}" "{output-dir}"`,
+	command: ``,
 	timeout: 10000,
 	enableCache: true,
-	cache: new Map(),
+	cache: [],
 }
 
 export default class MyPlugin extends Plugin {
@@ -30,7 +28,6 @@ export default class MyPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 		if (this.settings.enableCache) await this.loadCache();
-
 		this.addSettingTab(new SampleSettingTab(this.app, this));
 		this.registerMarkdownCodeBlockProcessor("latex", (source, el, ctx) => this.renderLatexToElement(source, el, ctx));
 	}
@@ -54,7 +51,11 @@ export default class MyPlugin extends Plugin {
 			fs.mkdirSync(this.cacheFolderPath);
 			this.cache = new Map();
 		} else {
-			this.cache = this.settings.cache;
+			this.cache = new Map(this.settings.cache);
+			// For some reason `this.cache` at this point is actually `Map<string, Array<string>>`
+			for (const [k, v] of this.cache) {
+				this.cache.set(k, new Set(v))
+			}
 		}
 	}
 
@@ -67,24 +68,26 @@ export default class MyPlugin extends Plugin {
 	}
 
 	hashLatexSource(source: string) {
-		return Md5.hashStr(source);
+		return Md5.hashStr(source.trim());
 	}
 
 
 	async renderLatexToElement(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) {
 		return new Promise<void>((resolve, reject) => {
-			source = this.formatLatexSource(source);
 			let md5Hash = this.hashLatexSource(source);
 			let svgPath = path.join(this.cacheFolderPath, `${md5Hash}.svg`);
 
 			// SVG file has already been cached
 			// Could have a case where svgCache has the key but the cached file has been deleted
 			if (this.settings.enableCache && this.cache.has(md5Hash) && fs.existsSync(svgPath)) {
+				console.log("Using cached SVG: ", md5Hash);
 				el.innerHTML = fs.readFileSync(svgPath).toString();
 				this.addFileToCache(md5Hash, ctx.sourcePath);
 				resolve();
 			}
 			else {
+				console.log("Rendering SVG: ", md5Hash);
+
 				this.renderLatexToSVG(source, md5Hash, svgPath).then((v: string) => {
 					if (this.settings.enableCache) this.addFileToCache(md5Hash, ctx.sourcePath);
 					el.innerHTML = v;
@@ -97,21 +100,20 @@ export default class MyPlugin extends Plugin {
 
 	renderLatexToSVG(source: string, md5Hash: string, svgPath: string) {
 		return new Promise(async (resolve, reject) => {
-			let texFile = md5Hash + ".tex";
-			let pdfFile = md5Hash + ".pdf";
+			source = this.formatLatexSource(source);
 
 			temp.mkdir("obsidian-latex-renderer", (err, dirPath) => {
 				if (err) reject(err);
-				fs.writeFileSync(path.join(dirPath, texFile), source);
+				fs.writeFileSync(path.join(dirPath, md5Hash + ".tex"), source);
 				exec(
-					this.settings.command.replace("{tex-file}", texFile).replace("{pdf-file}", path.join(dirPath, pdfFile)).replace("{output-dir}", dirPath)
+					this.settings.command.replace(/{file-path}/g, md5Hash)
 					,
 					{ timeout: this.settings.timeout, cwd: dirPath },
 					async (err, stdout, stderr) => {
 						if (err) reject([err, stdout, stderr]);
 						else {
-							if (this.settings.enableCache) fs.copyFileSync(path.join(dirPath, "content1.svg"), svgPath);
-							let svgData = fs.readFileSync(path.join(dirPath, "content1.svg"));
+							if (this.settings.enableCache) fs.copyFileSync(path.join(dirPath, md5Hash + ".svg"), svgPath);
+							let svgData = fs.readFileSync(path.join(dirPath, md5Hash + ".svg"));
 							resolve(svgData);
 						};
 					},
@@ -121,8 +123,13 @@ export default class MyPlugin extends Plugin {
 	}
 
 	async saveCache() {
-		this.settings.cache = this.cache;
+		let temp = new Map();
+		for (const [k, v] of this.cache) {
+			temp.set(k, [...v])
+		}
+		this.settings.cache = [...temp];
 		await this.saveSettings();
+
 	}
 
 	addFileToCache(hash: string, file_path: string) {
@@ -196,8 +203,7 @@ export default class MyPlugin extends Plugin {
 			let lines = (await this.app.vault.read(file)).split('\n');
 			for (const section of sections) {
 				if (section.type != "code" && lines[section.position.start.line].match("``` *latex") == null) continue;
-				let file_source = lines.slice(section.position.start.line + 1, section.position.end.line).join("\n");
-				let source = this.formatLatexSource(file_source);
+				let source = lines.slice(section.position.start.line + 1, section.position.end.line).join("\n");
 				let hash = this.hashLatexSource(source);
 				hashes.push(hash);
 			}

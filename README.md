@@ -1,45 +1,25 @@
 # Obsidian Latex Renderer
 
-This plugin renders codeblocks with the label `latex` into an SVG and displays them inline in the note on preview. You are required to bring your own command that outputs a `.svg` file from a `.tex` file input, examples are given below.
+This plugin renders codeblocks with the label `latex` into an SVG and displays them inline in the note on preview. **You are required to bring your own command** that outputs a `.svg` file from a `.tex` file input, examples are given below.
 
 # Setup
-1. Install latex
+1. Install latex system
 2. Install this plugin
 3. Set the command in settings
 
 ## Command Syntax
 When these strings appear in your command, they will be replaced with their respective values. I would recommend wrapping them in quote marks `""` in the event of spaces.
 
-`{tex-file}`: The relative path to the generated tex file with respect to the current working directory.
+`{file-path}`: The absolute path to the file to be processed without the file extension. Most latex commands don't require the file extension, if one does you can just add it.
 
-`{pdf-file}`: The absolute path to the generated pdf file.
+### Example
+    latex -interaction=nonstopmode -halt-on-error -shell-escape "{file-path}" && dvisvgm "{file-path}"
 
-`{output-dir}`: The absolute path to the current working directory.
+This command uses `latex` to output a `.dvi` file and `dvisvgm` to convert the `.dvi` into an `.svg`. Both of these commands should be available from most tex systems.
 
-## Examples
-Note that these were tested on Windows only, I do not know if they work on other OSs.
+The text in the output of the above command make look strange because by default `dvisvgm` uses `<font>` tags which are not supported by Obsidian. To fix this the `--font-format` option can be set. (See: https://dvisvgm.de/Manpage/)
 
-### `pdflatex` and `pdf2svg2`
-This is the first way I tried to generate latex to an `.svg`. The given command is set by default.
-
-Install
-- Miktex(this installs `pdflatex`): https://miktex.org/
-- `pdf2svg2`: https://community.jalios.com/jcms/jc2_183627/en/pdf2svg2-bat-script
-
-Set the command
-
-    pdflatex -interaction=nonstopmode -halt-on-error -shell-escape "{tex-file}" && pdf2svg "{pdf-file}" "{output-dir}"
-
-You may want to use the absolute paths to `pdflatex` and `pdf2svg`.
-
-### `tectonic` and `pdf2svg2` (recommended)
-Install
-- `tectonic`: https://tectonic-typesetting.github.io/en-US/
-- `pdf2svg2`: https://community.jalios.com/jcms/jc2_183627/en/pdf2svg2-bat-script
-
-Set the command
-
-    tectonic -X compile "{tex-file}" && pdf2svg2 "{pdf-file}" "{output-dir}"
+    latex -interaction=nonstopmode -halt-on-error -shell-escape "{file-path}" && dvisvgm --font-format=woff2,ah "{file-path}"
 
 # Usage
 The content inside of `latex` code blocks will be rendered using the given command. The document class `standalone` will be set for you using `\documentclass{standalone}`. You can load any packages you need with `\usepackage{}`.
@@ -52,7 +32,7 @@ By default the plugin will keep generated `.svg` files in `.obsidian/obsidian-la
 This should allow (hasn't been tested) `latex` code blocks to appear as `.svg` in notes when the vault is synced across different devices that may not have `latex` installed. Just don't edit the code block otherwise it won't be happy.
 
 ## Examples
-The svgs shown below have been generated in Obsidian with the setup in [`tectonic` and `pdf2svg2`](###-`tectonic`-and-`pdf2svg2`-(recommended))
+The svgs shown below have been generated in Obsidian with the setup in 
 
 <img align="right" src="./assets/svg1.svg" style="background-color: white">
 
