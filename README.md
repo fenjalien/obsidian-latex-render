@@ -1,3 +1,5 @@
+*THIS PROJECT WAS MERELY AN EXPIREMENT AND I HAVE SINCE MOVED ONTO OTHER PROJECTS*
+
 # Obsidian Latex Renderer
 
 This plugin renders codeblocks with the label `latex` into an SVG and displays them inline in the note on preview. **You are required to bring your own command** that outputs a `.svg` file from a `.tex` file input, examples are given below.
